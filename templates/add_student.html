@@ -3,12 +3,67 @@
 {% block title %}Add Student{% endblock %}
 
 {% block content %}
-<h1>Add Student</h1>
-<form method="POST">
-    <input type="text" name="fname" placeholder="First Name" required>
-    <input type="text" name="lname" placeholder="Last Name" required>
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="number" name="grade_level" min="9" max="12" required>
-    <button type="submit">Add Student</button>
-</form>
+
+<div class="page-header">
+    <a href="/students" style="font-size:13px; color:#e94560; text-decoration:none;">
+        ← Back to Students
+    </a>
+    <h1 style="margin-top:8px;">Add New Student</h1>
+    <p>Fill in the details below to register a new student</p>
+</div>
+
+<div style="max-width: 600px;">
+    <div class="card">
+        <h2>Student Information</h2>
+
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+        {% endif %}
+
+        <form method="POST">
+            <div class="two-col">
+                <div class="form-group">
+                    <label>First Name *</label>
+                    <input type="text" name="fname" placeholder="e.g. John" required>
+                </div>
+                <div class="form-group">
+                    <label>Last Name *</label>
+                    <input type="text" name="lname" placeholder="e.g. Doe" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Middle Name <span style="color:#bbb; font-weight:400;">(optional)</span></label>
+                <input type="text" name="mname" placeholder="e.g. James">
+            </div>
+
+            <div class="form-group">
+                <label>Email Address *</label>
+                <input type="email" name="email" placeholder="e.g. john.doe@school.com" required>
+            </div>
+
+            <div class="form-group">
+                <label>Grade Level *</label>
+                <select name="grade_level" required>
+                    <option value="">Select grade</option>
+                    <option value="9">Grade 9</option>
+                    <option value="10">Grade 10</option>
+                    <option value="11">Grade 11</option>
+                    <option value="12">Grade 12</option>
+                </select>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button type="submit" class="btn btn-primary">Add Student</button>
+                <a href="/students" class="btn" 
+                   style="background:#f0f2f5; color:#555;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}

@@ -219,7 +219,7 @@ def students():
         selected_grade=selected_grade
     )
 
-
+# Student Detail
 @app.route("/students/<int:student_id>")
 def student_detail(student_id):
     conn = get_conn()
@@ -309,24 +309,39 @@ def student_detail(student_id):
 # Add Student
 @app.route("/add-student", methods=["GET", "POST"])
 def add_student():
+    error = None
+    success = None
+
     if request.method == "POST":
-        fname = request.form["fname"]
-        lname = request.form["lname"]
-        email = request.form["email"]
+        fname = request.form["fname"].strip()
+        mname = request.form["mname"].strip() or None
+        lname = request.form["lname"].strip()
+        email = request.form["email"].strip()
         grade_level = request.form["grade_level"]
-        
-        conn = get_conn()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO students (first_name, last_name, email, grade_level) VALUES (%s, %s, %s, %s)",
-            (fname, lname, email, grade_level)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return redirect(url_for("students"))
-    
-    return render_template("add_student.html")
+
+        if not all([fname, lname, email, grade_level]):
+            error = "Please fill in all required fields."
+        else:
+            conn = get_conn()
+            cursor = conn.cursor(buffered=True)
+            try:
+                cursor.execute(
+                    """INSERT INTO students 
+                    (first_name, middle_name, last_name, email, grade_level) 
+                    VALUES (%s, %s, %s, %s, %s)""",
+                    (fname, mname, lname, email, grade_level)
+                )
+                conn.commit()
+                success = f"Student {fname} {lname} added successfully."
+            except mysql.connector.IntegrityError:
+                error = "A student with this email already exists."
+            except mysql.connector.Error as e:
+                error = f"Database error: {str(e)}"
+            finally:
+                cursor.close()
+                conn.close()
+
+    return render_template("add_student.html", error=error, success=success)
 
 if __name__ == '__main__':
     app.run(debug=True)

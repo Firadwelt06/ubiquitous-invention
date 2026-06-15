@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Courses{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1>Courses</h1>
+    <p>All available courses this semester</p>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <label>Academic Period</label>
+    <form method="GET" action="/courses" style="display:flex; gap:10px; align-items:center;">
+        <select name="year_id" onchange="this.form.submit()">
+            {% for year in years %}
+            <option value="{{ year['year_id'] }}"
+                {% if year['year_id'] == selected_year_id %}selected{% endif %}>
+                {{ year['year_name'] }}
+            </option>
+            {% endfor %}
+        </select>
+        <select name="semester_id" onchange="this.form.submit()">
+            {% for semester in semesters %}
+            <option value="{{ semester['semester_id'] }}"
+                {% if semester['semester_id'] == selected_semester_id %}selected{% endif %}>
+                {{ semester['semester_name'] }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<!-- Courses Table -->
+<div class="card">
+    <h2>All Courses</h2>
+    {% if courses %}
+    <table>
+        <thead>
+            <tr>
+                <th>Course Name</th>
+                <th>Teacher</th>
+                <th>Capacity</th>
+                <th>Enrolled</th>
+                <th>Slots Left</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for course in courses %}
+            <tr>
+                <td><strong>{{ course['course_name'] }}</strong></td>
+                <td>{{ course['teacher'] }}</td>
+                <td>{{ course['capacity'] }}</td>
+                <td>{{ course['enrolled'] }}</td>
+                <td>
+                    {% set slots = course['capacity'] - course['enrolled'] %}
+                    {% if slots <= 0 %}
+                    <span style="color:#e74c3c; font-weight:600;">Full</span>
+                    {% elif slots <= 5 %}
+                    <span style="color:#f39c12; font-weight:600;">{{ slots }}</span>
+                    {% else %}
+                    <span style="color:#27ae60; font-weight:600;">{{ slots }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/courses/{{ course['course_id'] }}?year_id={{ selected_year_id }}&semester_id={{ selected_semester_id }}"
+                       class="btn btn-primary" style="padding:5px 12px; font-size:12px;">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">No courses found.</div>
+    {% endif %}
+</div>
+
+{% endblock %}

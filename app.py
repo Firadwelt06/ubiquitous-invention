@@ -471,5 +471,162 @@ def grades():
         success=success
     )
 
+# Courses
+@app.route("/courses")
+def courses():
+    conn = get_conn()
+    cursor = conn.cursor(dictionary=True, buffered=True)
+
+    selected_year_id = request.args.get("year_id", type=int)
+    selected_semester_id = request.args.get("semester_id", type=int)
+
+    # Get all years
+    cursor.execute("SELECT year_id, year_name FROM academic_years ORDER BY year_name DESC")
+    years = cursor.fetchall()
+
+    # Default to current year
+    if not selected_year_id and years:
+        cursor.execute("SELECT year_id FROM academic_years WHERE is_current = 1 LIMIT 1")
+        current_year = cursor.fetchone()
+        selected_year_id = current_year["year_id"] if current_year else years[0]["year_id"]
+
+    # Get semesters
+    semesters = []
+    if selected_year_id:
+        cursor.execute("""
+            SELECT semester_id, semester_name 
+            FROM semesters 
+            WHERE year_id = %s 
+            ORDER BY semester_order
+        """, (selected_year_id,))
+        semesters = cursor.fetchall()
+
+    if not selected_semester_id and semesters:
+        selected_semester_id = semesters[0]["semester_id"]
+
+    # Get all courses with teacher and enrollment count
+    cursor.execute("""
+        SELECT 
+            c.course_id,
+            c.course_name,
+            c.capacity,
+            CONCAT(t.first_name, ' ', t.last_name) AS teacher,
+            COUNT(e.enrollment_id) AS enrolled
+        FROM courses c
+        JOIN teachers t ON c.teacher_id = t.teacher_id
+        LEFT JOIN enrollments e ON c.course_id = e.course_id
+            AND e.semester_id = %s
+        GROUP BY c.course_id
+        ORDER BY c.course_name
+    """, (selected_semester_id,))
+    courses = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template("courses.html",
+        courses=courses,
+        years=years,
+        semesters=semesters,
+        selected_year_id=selected_year_id,
+        selected_semester_id=selected_semester_id
+    )
+
+# Course Detail
+@app.route("/courses/<int:course_id>")
+def course_detail(course_id):
+    conn = get_conn()
+    cursor = conn.cursor(dictionary=True, buffered=True)
+
+    selected_year_id = request.args.get("year_id", type=int)
+    selected_semester_id = request.args.get("semester_id", type=int)
+
+    # Get all years
+    cursor.execute("SELECT year_id, year_name FROM academic_years ORDER BY year_name DESC")
+    years = cursor.fetchall()
+
+    if not selected_year_id and years:
+        cursor.execute("SELECT year_id FROM academic_years WHERE is_current = 1 LIMIT 1")
+        current_year = cursor.fetchone()
+        selected_year_id = current_year["year_id"] if current_year else years[0]["year_id"]
+
+    semesters = []
+    if selected_year_id:
+        cursor.execute("""
+            SELECT semester_id, semester_name 
+            FROM semesters WHERE year_id = %s 
+            ORDER BY semester_order
+        """, (selected_year_id,))
+        semesters = cursor.fetchall()
+
+    if not selected_semester_id and semesters:
+        selected_semester_id = semesters[0]["semester_id"]
+
+    # Get course info
+    cursor.execute("""
+        SELECT 
+            c.course_id,
+            c.course_name,
+            c.capacity,
+            CONCAT(t.first_name, ' ', t.last_name) AS teacher,
+            t.email AS teacher_email
+        FROM courses c
+        JOIN teachers t ON c.teacher_id = t.teacher_id
+        WHERE c.course_id = %s
+    """, (course_id,))
+    course = cursor.fetchone()
+
+    if not course:
+        cursor.close()
+        conn.close()
+        return redirect(url_for("courses"))
+
+    # Get enrolled students
+    students = []
+    grade_distribution = []
+    enrollment_count = 0
+
+    if selected_semester_id:
+        cursor.execute("""
+            SELECT 
+                CONCAT(s.first_name, ' ', COALESCE(s.middle_name, ''), ' ', s.last_name) AS student_name,
+                s.grade_level,
+                COALESCE(e.final_grade, 'Not graded') AS final_grade,
+                DATE(e.enrollment_date) AS enrolled_on
+            FROM enrollments e
+            JOIN students s ON e.student_id = s.student_id
+            WHERE e.course_id = %s
+            AND e.semester_id = %s
+            ORDER BY s.last_name
+        """, (course_id, selected_semester_id))
+        students = cursor.fetchall()
+        enrollment_count = len(students)
+
+        # Grade distribution
+        cursor.execute("""
+            SELECT final_grade, COUNT(*) as count
+            FROM enrollments
+            WHERE course_id = %s
+            AND semester_id = %s
+            AND final_grade IS NOT NULL
+            GROUP BY final_grade
+            ORDER BY FIELD(final_grade, 'S', 'A', 'B', 'C', 'D', 'F')
+        """, (course_id, selected_semester_id))
+        grade_distribution = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template("course_detail.html",
+        course=course,
+        students=students,
+        grade_distribution=grade_distribution,
+        enrollment_count=enrollment_count,
+        years=years,
+        semesters=semesters,
+        selected_year_id=selected_year_id,
+        selected_semester_id=selected_semester_id
+    )
+
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course['course_name'] }}{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <a href="/courses?year_id={{ selected_year_id }}&semester_id={{ selected_semester_id }}"
+       style="font-size:13px; color:#e94560; text-decoration:none;">
+        ← Back to Courses
+    </a>
+    <h1 style="margin-top:8px;">{{ course['course_name'] }}</h1>
+    <p>Taught by {{ course['teacher'] }}</p>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <label>Academic Period</label>
+    <form method="GET" style="display:flex; gap:10px; align-items:center;">
+        <select name="year_id" onchange="this.form.submit()">
+            {% for year in years %}
+            <option value="{{ year['year_id'] }}"
+                {% if year['year_id'] == selected_year_id %}selected{% endif %}>
+                {{ year['year_name'] }}
+            </option>
+            {% endfor %}
+        </select>
+        <select name="semester_id" onchange="this.form.submit()">
+            {% for semester in semesters %}
+            <option value="{{ semester['semester_id'] }}"
+                {% if semester['semester_id'] == selected_semester_id %}selected{% endif %}>
+                {{ semester['semester_name'] }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<!-- Course Metrics -->
+<div class="metrics-grid">
+    <div class="metric-card blue">
+        <h3>Teacher</h3>
+        <div style="font-size:16px; font-weight:600; color:#1a1a2e; margin-top:8px;">
+            {{ course['teacher'] }}
+        </div>
+    </div>
+    <div class="metric-card green">
+        <h3>Enrolled / Capacity</h3>
+        <div class="value">{{ enrollment_count }} / {{ course['capacity'] }}</div>
+    </div>
+    <div class="metric-card red">
+        <h3>Slots Remaining</h3>
+        <div class="value">{{ course['capacity'] - enrollment_count }}</div>
+    </div>
+</div>
+
+<div class="two-col">
+
+    <!-- Enrolled Students -->
+    <div class="card">
+        <h2>Enrolled Students</h2>
+        {% if students %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Grade Level</th>
+                    <th>Grade</th>
+                    <th>Enrolled On</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                <tr>
+                    <td><strong>{{ student['student_name'] }}</strong></td>
+                    <td>Grade {{ student['grade_level'] }}</td>
+                    <td>
+                        {% if student['final_grade'] != 'Not graded' %}
+                        <span class="grade-badge">{{ student['final_grade'] }}</span>
+                        {% else %}
+                        <span style="color:#bbb; font-size:13px;">Not graded</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ student['enrolled_on'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">No students enrolled this semester.</div>
+        {% endif %}
+    </div>
+
+    <!-- Grade Distribution -->
+    <div class="card">
+        <h2>Grade Distribution</h2>
+        {% if grade_distribution %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Grade</th>
+                    <th>Count</th>
+                    <th>Percentage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in grade_distribution %}
+                <tr>
+                    <td><span class="grade-badge">{{ row['final_grade'] }}</span></td>
+                    <td>{{ row['count'] }}</td>
+                    <td>
+                        {% if enrollment_count > 0 %}
+                        {{ ((row['count'] / enrollment_count) * 100) | round(1) }}%
+                        {% else %}
+                        0%
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">No grades recorded yet.</div>
+        {% endif %}
+    </div>
+
+</div>
+
+{% endblock %}

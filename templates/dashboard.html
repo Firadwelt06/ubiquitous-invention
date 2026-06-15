@@ -1,9 +1,87 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>School Dashboard</title>
-    </head>
-    <body>
-        <h1>Welcome to School Dashboard</h1>
-    </body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1>School Dashboard</h1>
+
+<!-- Semester Filter Form -->
+<form method="GET" action="/">
+    <select name="year_id" onchange="this.form.submit()">
+        {% for year in years %}
+        <option value="{{ year['year_id'] }}" 
+            {% if year['year_id'] == selected_year_id %}selected{% endif %}>
+            {{ year['year_name'] }}
+        </option>
+        {% endfor %}
+    </select>
+
+    <select name="semester_id" onchange="this.form.submit()">
+        {% for semester in semesters %}
+        <option value="{{ semester['semester_id'] }}"
+            {% if semester['semester_id'] == selected_semester_id %}selected{% endif %}>
+            {{ semester['semester_name'] }}
+        </option>
+        {% endfor %}
+    </select>
+</form>
+
+<!-- Metrics -->
+<div>
+    <div>
+        <h3>Active Students</h3>
+        <p>{{ metrics['students'] }}</p>
+    </div>
+    <div>
+        <h3>Active Courses</h3>
+        <p>{{ metrics['courses'] }}</p>
+    </div>
+    <div>
+        <h3>Total Enrollments</h3>
+        <p>{{ metrics['enrollments'] }}</p>
+    </div>
+</div>
+
+<!-- Top Students -->
+<h2>Top Students This Semester</h2>
+{% if top_students %}
+<table>
+    <tr>
+        <th>Student</th>
+        <th>Grade Level</th>
+        <th>GPA</th>
+        <th>Courses Taken</th>
+    </tr>
+    {% for student in top_students %}
+    <tr>
+        <td>{{ student['student_name'] }}</td>
+        <td>{{ student['grade_level'] }}</td>
+        <td>{{ student['gpa'] }}</td>
+        <td>{{ student['courses_taken'] }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No grade records found for this semester.</p>
+{% endif %}
+
+<!-- Grade Distribution -->
+<h2>Grade Distribution</h2>
+{% if grade_distribution %}
+<table>
+    <tr>
+        <th>Grade</th>
+        <th>Count</th>
+    </tr>
+    {% for row in grade_distribution %}
+    <tr>
+        <td>{{ row['final_grade'] }}</td>
+        <td>{{ row['count'] }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No grades recorded this semester.</p>
+{% endif %}
+
+{% endblock %}

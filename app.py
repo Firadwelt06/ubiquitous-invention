@@ -700,5 +700,184 @@ def course_detail(course_id):
         selected_semester_id=selected_semester_id
     )
 
+#Settings
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    conn = get_conn()
+    cursor = conn.cursor(dictionary=True, buffered=True)
+
+    error = None
+    success = None
+    active_tab = request.args.get("tab", "academic")
+
+    # ── ACADEMIC YEARS & SEMESTERS ──
+    if request.method == "POST" and request.form.get("action") == "add_year":
+        year_name = request.form.get("year_name", "").strip()
+        is_current = 1 if request.form.get("is_current") else 0
+        if not year_name:
+            error = "Year name is required."
+        else:
+            try:
+                if is_current:
+                    cursor.execute("UPDATE academic_years SET is_current = 0")
+                    conn.commit()
+                cursor.execute(
+                    "INSERT INTO academic_years (year_name, is_current) VALUES (%s, %s)",
+                    (year_name, is_current)
+                )
+                conn.commit()
+                success = f"Academic year {year_name} added."
+                active_tab = "academic"
+            except mysql.connector.IntegrityError:
+                error = "That academic year already exists."
+
+    elif request.method == "POST" and request.form.get("action") == "add_semester":
+        year_id = request.form.get("year_id")
+        semester_name = request.form.get("semester_name", "").strip()
+        semester_order = request.form.get("semester_order")
+        if not all([year_id, semester_name, semester_order]):
+            error = "All semester fields are required."
+        else:
+            try:
+                cursor.execute(
+                    """INSERT INTO semesters (year_id, semester_name, semester_order)
+                    VALUES (%s, %s, %s)""",
+                    (year_id, semester_name, semester_order)
+                )
+                conn.commit()
+                success = f"Semester {semester_name} added."
+                active_tab = "academic"
+            except mysql.connector.IntegrityError:
+                error = "That semester already exists for this year."
+
+    elif request.method == "POST" and request.form.get("action") == "set_current_year":
+        year_id = request.form.get("year_id")
+        if year_id:
+            cursor.execute("UPDATE academic_years SET is_current = 0")
+            conn.commit()
+            cursor.execute(
+                "UPDATE academic_years SET is_current = 1 WHERE year_id = %s",
+                (year_id,)
+            )
+            conn.commit()
+            success = "Current academic year updated."
+            active_tab = "academic"
+
+    # ── TEACHERS ──
+    elif request.method == "POST" and request.form.get("action") == "add_teacher":
+        fname = request.form.get("fname", "").strip()
+        lname = request.form.get("lname", "").strip()
+        email = request.form.get("email", "").strip()
+        hire_date = request.form.get("hire_date")
+        if not all([fname, lname, email, hire_date]):
+            error = "All teacher fields are required."
+        else:
+            try:
+                cursor.execute(
+                    """INSERT INTO teachers (first_name, last_name, email, hire_date)
+                    VALUES (%s, %s, %s, %s)""",
+                    (fname, lname, email, hire_date)
+                )
+                conn.commit()
+                success = f"Teacher {fname} {lname} added."
+                active_tab = "teachers"
+            except mysql.connector.IntegrityError:
+                error = "A teacher with this email already exists."
+
+    # ── COURSES ──
+    elif request.method == "POST" and request.form.get("action") == "add_course":
+        course_name = request.form.get("course_name", "").strip()
+        description = request.form.get("description", "").strip() or None
+        capacity = request.form.get("capacity")
+        teacher_id = request.form.get("teacher_id")
+        if not all([course_name, capacity, teacher_id]):
+            error = "Course name, capacity and teacher are required."
+        else:
+            try:
+                cursor.execute(
+                    """INSERT INTO courses (course_name, description, capacity, teacher_id)
+                    VALUES (%s, %s, %s, %s)""",
+                    (course_name, description, capacity, teacher_id)
+                )
+                conn.commit()
+                success = f"Course {course_name} added."
+                active_tab = "courses"
+            except mysql.connector.IntegrityError:
+                error = "That course already exists."
+
+    # ── ACCOUNT ──
+    elif request.method == "POST" and request.form.get("action") == "change_password":
+        current_password = request.form.get("current_password", "").strip()
+        new_password = request.form.get("new_password", "").strip()
+        confirm_password = request.form.get("confirm_password", "").strip()
+
+        current_hash = hashlib.sha256(current_password.encode()).hexdigest()
+        cursor.execute(
+            "SELECT password_hash FROM users WHERE user_id = %s",
+            (current_user.id,)
+        )
+        user = cursor.fetchone()
+
+        if not user or current_hash != user["password_hash"]:
+            error = "Current password is incorrect."
+            active_tab = "account"
+        elif new_password != confirm_password:
+            error = "New passwords do not match."
+            active_tab = "account"
+        elif len(new_password) < 6:
+            error = "New password must be at least 6 characters."
+            active_tab = "account"
+        else:
+            new_hash = hashlib.sha256(new_password.encode()).hexdigest()
+            cursor.execute(
+                "UPDATE users SET password_hash = %s WHERE user_id = %s",
+                (new_hash, current_user.id)
+            )
+            conn.commit()
+            success = "Password changed successfully."
+            active_tab = "account"
+
+    # ── FETCH DATA FOR DISPLAY ──
+    cursor.execute(
+        "SELECT year_id, year_name, is_current FROM academic_years ORDER BY year_name DESC"
+    )
+    academic_years = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT s.semester_id, s.semester_name, s.semester_order, ay.year_name
+        FROM semesters s
+        JOIN academic_years ay ON s.year_id = ay.year_id
+        ORDER BY ay.year_name DESC, s.semester_order
+    """)
+    semesters = cursor.fetchall()
+
+    cursor.execute(
+        "SELECT teacher_id, first_name, last_name, email, hire_date FROM teachers ORDER BY last_name"
+    )
+    teachers = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT c.course_id, c.course_name, c.description, c.capacity,
+               CONCAT(t.first_name, ' ', t.last_name) AS teacher
+        FROM courses c
+        JOIN teachers t ON c.teacher_id = t.teacher_id
+        ORDER BY c.course_name
+    """)
+    courses = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template("settings.html",
+        active_tab=active_tab,
+        academic_years=academic_years,
+        semesters=semesters,
+        teachers=teachers,
+        courses=courses,
+        error=error,
+        success=success
+    )
+
 if __name__ == '__main__':
     app.run(debug=True)

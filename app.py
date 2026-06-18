@@ -5,6 +5,38 @@ import hashlib
 from dotenv import load_dotenv
 import mysql.connector
 import os
+import subprocess
+from datetime import datetime
+
+MYSQLDUMP_PATH = r"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe"
+BACKUP_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups")
+
+def run_daily_backup():
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    backup_filename = f"school_db_backup_{today_str}.sql"
+    backup_path = os.path.join(BACKUP_FOLDER, backup_filename)
+
+    # If today's backup already exists, skip
+    if os.path.exists(backup_path):
+        print(f"Backup already exists for today: {backup_filename}")
+        return
+
+    # Make sure the backups folder exists
+    os.makedirs(BACKUP_FOLDER, exist_ok=True)
+
+    try:
+        with open(backup_path, "w") as backup_file:
+            subprocess.run([
+                MYSQLDUMP_PATH,
+                "--no-tablespaces",
+                "-h", os.getenv("DB_HOST"),
+                "-u", os.getenv("DB_USERNAME"),
+                f"-p{os.getenv('DB_PASSWORD')}",
+                os.getenv("DB_DATABASE")
+            ], stdout=backup_file, check=True)
+        print(f"Backup created successfully: {backup_filename}")
+    except subprocess.CalledProcessError as e:
+        print(f"Backup failed: {e}")
 
 load_dotenv()
 
@@ -1000,4 +1032,5 @@ def delete_course(course_id):
         success="Course deleted successfully."))
 
 if __name__ == '__main__':
+    run_daily_backup()
     app.run(debug=True)

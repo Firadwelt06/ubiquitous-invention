@@ -1,3 +1,5 @@
 .env
 SQL Scheme.sql
 .gitignore
+
+backups/

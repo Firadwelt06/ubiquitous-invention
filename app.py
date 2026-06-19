@@ -269,16 +269,38 @@ def dashboard():
     )
 
 # Students
+# Whitelist of allowed sort keys -> real SQL columns/expressions.
+# NEVER let a raw URL value become a column name directly in SQL.
+STUDENT_SORT_COLUMNS = {
+    "name": "s.last_name",
+    "email": "s.email",
+    "grade": "s.grade_level",
+    "courses": "course_count",
+}
+STUDENTS_PER_PAGE = 20
+
 @app.route("/students")
 @login_required
 def students():
     conn = get_conn()
     cursor = conn.cursor(dictionary=True)
-    
+
     # Get semester filter from URL
     selected_year_id = request.args.get("year_id", type=int)
     selected_semester_id = request.args.get("semester_id", type=int)
     selected_grade = request.args.get("grade_level", type=int)
+
+    # Search, sort, and pagination params
+    search = request.args.get("search", "").strip()
+    sort = request.args.get("sort", "name")
+    if sort not in STUDENT_SORT_COLUMNS:
+        sort = "name"
+    direction = request.args.get("dir", "asc")
+    if direction not in ("asc", "desc"):
+        direction = "asc"
+    page = request.args.get("page", 1, type=int)
+    if page < 1:
+        page = 1
 
     # Get all years
     cursor.execute("SELECT year_id, year_name FROM academic_years ORDER BY year_name DESC")
@@ -304,11 +326,44 @@ def students():
     if not selected_semester_id and semesters:
         selected_semester_id = semesters[0]["semester_id"]
 
-    # Get all students with enrollment count for selected semester
-    grade_filter = "AND s.grade_level = %s" if selected_grade else ""
-    params = [selected_semester_id]
+    # Build WHERE clause pieces. Each filter adds its own placeholder
+    # and matching parameter, in the same order, to keep them in sync.
+    where_clauses = ["1=1"]
+    where_params = []
+
     if selected_grade:
-        params.append(selected_grade)
+        where_clauses.append("s.grade_level = %s")
+        where_params.append(selected_grade)
+
+    if search:
+        where_clauses.append(
+            "(CONCAT(s.first_name, ' ', COALESCE(s.middle_name, ''), ' ', s.last_name) LIKE %s "
+            "OR s.email LIKE %s)"
+        )
+        like_term = f"%{search}%"
+        where_params.append(like_term)
+        where_params.append(like_term)
+
+    where_sql = " AND ".join(where_clauses)
+
+    # Count total matching students (for pagination), independent of LIMIT/OFFSET
+    cursor.execute(f"""
+        SELECT COUNT(*) as total
+        FROM students s
+        WHERE {where_sql}
+    """, where_params)
+    total_count = cursor.fetchone()["total"]
+    total_pages = max(1, (total_count + STUDENTS_PER_PAGE - 1) // STUDENTS_PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * STUDENTS_PER_PAGE
+
+    # Main query: enrollment count needs the semester param first (used inside the JOIN),
+    # then the WHERE params, then LIMIT/OFFSET params at the end.
+    sort_column = STUDENT_SORT_COLUMNS[sort]
+    # direction is validated above against a fixed set, so it's safe to
+    # interpolate directly here (it can only ever be "asc" or "desc")
+    query_params = [selected_semester_id] + where_params + [STUDENTS_PER_PAGE, offset]
 
     cursor.execute(f"""
         SELECT 
@@ -320,10 +375,11 @@ def students():
         FROM students s
         LEFT JOIN enrollments e ON s.student_id = e.student_id 
             AND e.semester_id = %s
-        WHERE 1=1 {grade_filter}
+        WHERE {where_sql}
         GROUP BY s.student_id
-        ORDER BY s.last_name
-    """, params)
+        ORDER BY {sort_column} {direction.upper()}
+        LIMIT %s OFFSET %s
+    """, query_params)
 
     students = cursor.fetchall()
     cursor.close()
@@ -335,7 +391,13 @@ def students():
         semesters=semesters,
         selected_year_id=selected_year_id,
         selected_semester_id=selected_semester_id,
-        selected_grade=selected_grade
+        selected_grade=selected_grade,
+        search=search,
+        sort=sort,
+        direction=direction,
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count
     )
 
 # Student Detail

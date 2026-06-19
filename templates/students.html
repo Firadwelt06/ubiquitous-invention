@@ -6,13 +6,13 @@
 
 <div class="page-header">
     <h1>Students</h1>
-    <p>All enrolled students</p>
+    <p>All enrolled students {% if total_count is defined %}({{ total_count }} total){% endif %}</p>
 </div>
 
 <!-- Filter Bar -->
 <div class="filter-bar">
     <label>Academic Period</label>
-    <form method="GET" action="/students" style="display:flex; gap:10px; align-items:center;">
+    <form method="GET" action="/students" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <select name="year_id" onchange="this.form.submit()">
             {% for year in years %}
             <option value="{{ year['year_id'] }}"
@@ -36,8 +36,16 @@
             <option value="11" {% if selected_grade == 11 %}selected{% endif %}>Grade 11</option>
             <option value="12" {% if selected_grade == 12 %}selected{% endif %}>Grade 12</option>
         </select>
-        <a href="/add-student" class="btn btn-primary">+ Add Student</a>
-        </form>
+
+        <!-- Search box. Submitting this form also re-sends year_id/semester_id/grade_level
+             above since they're all inside the same <form>. Sort and page are NOT in this
+             form, so a new search intentionally resets sort/page to defaults (page 1, name sort) -->
+        <input type="text" name="search" placeholder="Search name or email..."
+               value="{{ search or '' }}" style="padding:8px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px;">
+        <button type="submit" class="btn btn-primary" style="padding:8px 16px;">Search</button>
+
+        <a href="/add-student" class="btn btn-primary" style="margin-left:auto;">+ Add Student</a>
+    </form>
 </div>
 
 <!-- Students Table -->
@@ -47,10 +55,33 @@
     <table>
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Grade Level</th>
-                <th>Courses This Semester</th>
+                {# Each header link preserves all current filters via request.args,
+                   overrides only 'sort' and 'page', and toggles direction if this
+                   column is already the active sort. #}
+                <th>
+                    <a href="{{ url_for('students', **dict(request.args, sort='name', dir=('desc' if sort == 'name' and direction == 'asc' else 'asc'), page=1)) }}"
+                       style="color:inherit; text-decoration:none;">
+                        Name {% if sort == 'name' %}{{ '▲' if direction == 'asc' else '▼' }}{% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="{{ url_for('students', **dict(request.args, sort='email', dir=('desc' if sort == 'email' and direction == 'asc' else 'asc'), page=1)) }}"
+                       style="color:inherit; text-decoration:none;">
+                        Email {% if sort == 'email' %}{{ '▲' if direction == 'asc' else '▼' }}{% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="{{ url_for('students', **dict(request.args, sort='grade', dir=('desc' if sort == 'grade' and direction == 'asc' else 'asc'), page=1)) }}"
+                       style="color:inherit; text-decoration:none;">
+                        Grade Level {% if sort == 'grade' %}{{ '▲' if direction == 'asc' else '▼' }}{% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="{{ url_for('students', **dict(request.args, sort='courses', dir=('desc' if sort == 'courses' and direction == 'asc' else 'asc'), page=1)) }}"
+                       style="color:inherit; text-decoration:none;">
+                        Courses This Semester {% if sort == 'courses' %}{{ '▲' if direction == 'asc' else '▼' }}{% endif %}
+                    </a>
+                </th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -71,8 +102,24 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <!-- Pagination -->
+    {% if total_pages and total_pages > 1 %}
+    <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-top:20px;">
+        {% if page > 1 %}
+        <a href="{{ url_for('students', **dict(request.args, page=page - 1)) }}" class="btn" style="background:#f0f0f0; color:#333; padding:8px 14px;">&laquo; Prev</a>
+        {% endif %}
+
+        <span style="font-size:14px; color:#888;">Page {{ page }} of {{ total_pages }}</span>
+
+        {% if page < total_pages %}
+        <a href="{{ url_for('students', **dict(request.args, page=page + 1)) }}" class="btn" style="background:#f0f0f0; color:#333; padding:8px 14px;">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% else %}
-    <div class="empty-state">No students found. Add one to get started.</div>
+    <div class="empty-state">No students found{% if search %} matching "{{ search }}"{% endif %}. Add one to get started.</div>
     {% endif %}
 </div>
 

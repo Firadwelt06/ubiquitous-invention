@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session, Response
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import hashlib
@@ -1262,6 +1262,27 @@ def import_students():
             results = {"added": added, "updated": updated, "skipped": skipped}
 
     return render_template("import_students.html", results=results)
+
+# Export Template
+@app.route("/students/import/template")
+@login_required
+def student_import_template():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "first_name", "middle_name", "last_name", "date_of_birth",
+        "email", "address", "guardian_name", "guardian_phone", "grade_level"
+    ])
+    writer.writerow([
+        "Jane", "M", "Doe", "2010-04-12",
+        "jane.doe@example.com", "123 Main St", "John Doe", "555-0100", "9"
+    ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=student_import_template.csv"}
+    )
 
 if __name__ == '__main__':
     run_daily_backup()
